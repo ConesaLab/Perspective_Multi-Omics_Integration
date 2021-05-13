@@ -1,0 +1,188 @@
+---
+title: "Comparison of omics data type properties"
+author: "Sonia Tarazona, Ángeles Arzalluz-Luque, Ana Conesa"
+date: "13/05/2021"
+output:
+  html_document:
+    df_print: paged
+---
+
+This [R Markdown](http://rmarkdown.rstudio.com) Notebook contains the necessary
+code to generate Figure 3 in **Tarazona et al. (2021): "Undisclosed, unmet and
+neglected challenges in multi-omics studies", *Nature Computational Sciences***. 
+In this figure, the STATegra dataset [^1] was used as an example to compare properties 
+of different omics data types. The STATegra dataset was generated for a transcription 
+factor Ikaros-induced mouse B-cell differentiation time-course.
+
+### Data preparation
+
+First, we defined some custom color palettes for consistency in the representation
+of the different omics.
+
+```{r}
+# set omic data names
+Omics <- c("RNA-seq", "scRNA-seq", "miRNA-seq", "RRBS", "ChIP-seq", 
+           "DNase-seq","Metabolomics", "Proteomics")
+
+# define plot colors
+mycolors = colors()[c(554,89,111,512,17,586,132,428,601,568,86,390)]
+names(mycolors) = Omics
+```
+
+To generate the plots, load the necessary data from the `Figure3.rdata` file.
+
+```{r}
+load("Figure3.RData")
+```
+
+
+
+
+### Figure 3.a: signal-to-noise plot.
+
+The plot in **Figure 3.a** includes a comparison between the signal-to-noise 
+ratio of the different omics in the STATegra dataset.
+
+First, calculate confidence intervals for the different omics:
+
+```{r}
+confi.change = t(sapply(myDmax, quantile, probs = c(0.25,0.75,0.5), na.rm = TRUE))
+confi.var = t(sapply(mySEglobal, quantile, probs = c(0.25,0.75,0.5), na.rm = TRUE))
+```
+
+Then, set some custom graphical parameters:
+
+```{r}
+mycolors2 = mycolors[c(1:4,6:8)]
+par(mar = c(5,4,1,1))
+```
+
+Finally generate the plot by running:
+
+```{r}
+plot(confi.change[,3], confi.var[,3], xlim = c(0.1,2.7), ylim = c(0,0.8), 
+     col = mycolors2, xlab = "Max Signal Change", ylab = "Stand. Error per Condition", 
+     pch = 18, main = "", cex = 1.5)
+segments(x0 = confi.change[,1], y0 = confi.var[,3], x1 = confi.change[,2], y1 = confi.var[,3], 
+         col = mycolors2, lwd = 3.5)
+segments(x0 = confi.change[,3], y0 = confi.var[,1], x1 = confi.change[,3], y1 = confi.var[,2], 
+         col = mycolors2, lwd = 3.5)
+legend("top", names(mycolors2), ncol = 2, lwd = 3.5, col = mycolors2, bty = "n", cex = 1)
+```
+
+
+
+
+### Figure 3.b: number of features detected by each technology.
+
+The plot in **Figure 3.b** compares the total number of detected features across
+omics data types in the STATegra dataset.
+
+First, we need to obtain the number of features per omic from the data:
+
+```{r}
+Features = c(length(myDmax$RNAseq), length(myDmax$scRNAseq),
+             length(myDmax$miRNAseq), length(myDmax$methylseq),
+             length(STATmapping_ChipSeqGenes$Gene), length(myDmax$DNaseSeq),
+             length(myDmax$metabolomics), length(myDmax$proteomics))
+names(Features) = Omics
+```
+
+
+Then, we set graphical parameters and generate the plot:
+
+```{r}
+par(mar = c(7.1, 4.1, 4.1, 2.1)) 
+
+barplot(log(Features), names.arg = Omics, 
+        col = mycolors, las = 2,
+        ylab = "log(#features)")
+```
+
+
+
+
+### Figure 3.c: differential coverage of the feature space.
+
+This plot contains a representation of the expression levels captured by each of
+the omics in the STATegra dataset. In it, each line represents the density distribution
+of the number of features captured at each expression level for each of the methods.
+
+The density distributions of mean feature expression across samples for each of 
+the omics can be computed as follows:
+
+
+```{r}
+# set graphical parameters
+par(mar = c(4,4,1,1))
+
+# RNA-seq
+par(mar = c(4,4,1,1))
+mRNAavg = rowMeans(mRNA[,grep("_Ik_", colnames(mRNA))])
+plot(density(mRNAavg), col = mycolors["RNA-seq"], lwd=3, ylim=c(0,0.18), xlim=c(4,20), lty=1,
+     main="",
+     xlab="mRNA expression levels")
+
+# Proteomics
+gene.ENSEM<-rownames(mRNA)[mRNA[,1] %in% gene.prot[,2]]
+prop_g0<-length(gene.ENSEM)/length(mRNAavg)
+lines(density(mRNAavg[gene.ENSEM])$x,density(mRNAavg[gene.ENSEM])$y*(prop_g0), col = mycolors["Proteomics"], lwd=3,lty=1)
+
+# scRNA-seq
+gene.ENSEM<-rownames(mRNA)[rownames(mRNA) %in% scRNAseq_genes]
+prop_g0<-length(gene.ENSEM)/length(mRNAavg)
+lines(density(mRNAavg[gene.ENSEM])$x,density(mRNAavg[gene.ENSEM])$y*(prop_g0), col = mycolors["scRNA-seq"], lwd=3, lty=1)
+
+# ChIP-seq
+gene.ENSEM<-rownames(mRNA)[rownames(mRNA) %in% STATmapping_ChipSeqGenes[,"Gene"]]
+prop_g0<-length(gene.ENSEM)/length(mRNAavg)
+lines(density(mRNAavg[gene.ENSEM])$x,density(mRNAavg[gene.ENSEM])$y*(prop_g0), col = mycolors["ChIP-seq"], lwd=3, lty=1)
+
+# DNase-seq
+gene.ENSEM<-rownames(mRNA)[rownames(mRNA) %in% STATmapping_DNaseSeqGenes2[,"Gene"]]
+prop_g0<-length(gene.ENSEM)/length(mRNAavg)
+lines(density(mRNAavg[gene.ENSEM])$x,density(mRNAavg[gene.ENSEM])$y*(prop_g0), col = mycolors["DNase-seq"], lwd=3,lty=1)
+
+# RRBS
+gene.ENSEM<-rownames(mRNA)[rownames(mRNA) %in% STATmapping_MethylGenes2[,"Gene"]]
+prop_g0<-length(gene.ENSEM)/length(mRNAavg)
+lines(density(mRNAavg[gene.ENSEM])$x,density(mRNAavg[gene.ENSEM])$y*(prop_g0), col = mycolors["RRBS"], lwd=3, lty = 1)
+
+# add plot features
+abline(v = seq(5,20,2.5), lty = 3, col = "gray30")
+legend("topleft", Omics[-c(3,7)], col = mycolors[-c(3,7)], lwd=3)#, bty = "n")
+```
+
+
+### Figure 3.d: statistical power comparison across omics.
+
+This plot includes a comparison of statistical power curves across omics
+data types as a function of sample size. Statistical power was computed using the
+MultiPower[^2] software.
+
+To reproduce this analysis, we first need to source the functions provided in the
+`Figure3_functions.R` script:
+
+```{r}
+source("Figure3_functions.R")
+```
+
+Then, execute the `powerPlot()` function as follows:
+
+```{r}
+# customize plot colors
+mycolors2 = mycolors[-c(2,4)]
+
+# run powerPlot()
+powerPlot(parameters = statResultsEQ$parameters, 
+          optimalSampleSize = statResultsEQ$optimalSampleSize, 
+          omicCol = mycolors2)
+
+```
+
+
+
+
+[^1]: Gomez-Cabrero, D., Tarazona, S., Ferreirós-Vidal, I. et al. STATegra, a comprehensive multi-omics dataset of B-cell differentiation in mouse. Sci Data 6, 256 (2019). https://doi.org/10.1038/s41597-019-0202-7
+
+[^2]: Tarazona, S., Balzano-Nogueira, L., Gómez-Cabrero, D. et al. Harmonization of quality metrics and power calculation in multi-omic studies. Nat Commun 11, 3092 (2020). https://doi.org/10.1038/s41467-020-16937-8
